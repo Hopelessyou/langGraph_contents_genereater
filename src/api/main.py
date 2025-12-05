@@ -1,5 +1,6 @@
 """FastAPI 메인 애플리케이션"""
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,11 +13,24 @@ from ..utils.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """애플리케이션 생명주기 관리"""
+    # Startup
+    logger.info("IBS 법률 AI 시스템 API 서버 시작")
+    logger.info(f"환경: {settings.log_level}")
+    yield
+    # Shutdown
+    logger.info("IBS 법률 AI 시스템 API 서버 종료")
+
+
 # FastAPI 앱 생성
 app = FastAPI(
     title="IBS 법률 AI 시스템 API",
     description="법률 정보 RAG 기반 질의응답 API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # 미들웨어 추가 (순서 중요)
@@ -53,20 +67,8 @@ async def global_exception_handler(request, exc):
     )
 
 
-@app.on_event("startup")
-async def startup_event():
-    """애플리케이션 시작 시 실행"""
-    logger.info("IBS 법률 AI 시스템 API 서버 시작")
-    logger.info(f"환경: {settings.log_level}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """애플리케이션 종료 시 실행"""
-    logger.info("IBS 법률 AI 시스템 API 서버 종료")
-
-
 if __name__ == "__main__":
+    """직접 실행 시"""
     import uvicorn
     uvicorn.run(
         "src.api.main:app",
