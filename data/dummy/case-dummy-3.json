@@ -1,0 +1,19 @@
+{
+  "id": "case-dummy-3",
+  "category": "형사",
+  "sub_category": "사기",
+  "type": "case",
+  "title": "대법원 2024더3 판결",
+  "content": "더미 판례 내용 3. 피고인은 사기 혐의로 기소되었습니다.",
+  "metadata": {
+    "court": "대법원",
+    "year": 2024,
+    "case_number": "2024더3",
+    "keywords": [
+      "사기",
+      "테스트"
+    ],
+    "holding": "더미 판결 요지 3",
+    "updated_at": "2025-12-05"
+  }
+}

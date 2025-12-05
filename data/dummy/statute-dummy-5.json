@@ -1,0 +1,18 @@
+{
+  "id": "statute-dummy-5",
+  "category": "형사",
+  "sub_category": "사기",
+  "type": "statute",
+  "title": "형법 제305조(더미 조문 5)",
+  "content": "더미 법령 조문 내용 5. 이는 테스트용 데이터입니다.",
+  "metadata": {
+    "law_name": "형법",
+    "article_number": "305",
+    "topics": [
+      "사기",
+      "테스트"
+    ],
+    "source": "테스트",
+    "updated_at": "2025-12-05"
+  }
+}

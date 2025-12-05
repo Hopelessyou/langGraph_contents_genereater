@@ -1,0 +1,18 @@
+{
+  "id": "procedure-dummy-3",
+  "category": "형사",
+  "sub_category": "사기",
+  "type": "procedure",
+  "title": "사기 사건 재판 절차",
+  "content": "1) 절차 시작 → 2) 조사/수사 → 3) 절차 종료",
+  "metadata": {
+    "stage": "재판",
+    "topic": "절차",
+    "keywords": [
+      "재판",
+      "사기",
+      "절차"
+    ],
+    "updated_at": "2025-12-05"
+  }
+}

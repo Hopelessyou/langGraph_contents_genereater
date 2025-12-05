@@ -1,0 +1,18 @@
+{
+  "id": "statute-dummy-3",
+  "category": "형사",
+  "sub_category": "사기",
+  "type": "statute",
+  "title": "형법 제303조(더미 조문 3)",
+  "content": "더미 법령 조문 내용 3. 이는 테스트용 데이터입니다.",
+  "metadata": {
+    "law_name": "형법",
+    "article_number": "303",
+    "topics": [
+      "사기",
+      "테스트"
+    ],
+    "source": "테스트",
+    "updated_at": "2025-12-05"
+  }
+}

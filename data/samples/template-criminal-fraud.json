@@ -1,0 +1,22 @@
+{
+  "id": "template-criminal-fraud",
+  "category": "형사",
+  "sub_category": "사기",
+  "type": "template",
+  "title": "형사사기 콘텐츠 템플릿",
+  "content": [
+    "1. 사건 요약",
+    "2. 사기 초범의 흔한 오해",
+    "3. 관련 법령 설명",
+    "4. 최신 판례 경향",
+    "5. 초범 선처 요건",
+    "6. 경찰 조사 포인트",
+    "7. 결론 및 조언"
+  ],
+  "metadata": {
+    "usage": "콘텐츠 생성 템플릿",
+    "output_styles": ["블로그형", "뉴스형", "네이버형"],
+    "updated_at": "2024-01-02"
+  }
+}
+
