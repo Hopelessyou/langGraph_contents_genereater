@@ -153,6 +153,7 @@ class DocumentIndexer:
         directory: Path | str,
         pattern: str = "*.json",
         chunk: bool = True,
+        recursive: bool = True,
     ) -> Dict[str, Any]:
         """
         디렉토리 내 모든 JSON 파일을 인덱싱합니다.
@@ -161,6 +162,7 @@ class DocumentIndexer:
             directory: 디렉토리 경로
             pattern: 파일 패턴
             chunk: 청킹 여부
+            recursive: 하위 디렉토리 재귀 검색 여부 (기본값: True)
             
         Returns:
             일괄 인덱싱 결과
@@ -173,7 +175,17 @@ class DocumentIndexer:
             "details": [],
         }
         
-        for file_path in directory.glob(pattern):
+        # 재귀 검색 여부에 따라 glob 또는 rglob 사용
+        if recursive:
+            file_paths = directory.rglob(pattern)
+        else:
+            file_paths = directory.glob(pattern)
+        
+        for file_path in file_paths:
+            # 디렉토리는 제외하고 파일만 처리
+            if not file_path.is_file():
+                continue
+                
             results["total"] += 1
             result = self.index_file(file_path, chunk=chunk)
             
@@ -183,7 +195,7 @@ class DocumentIndexer:
                 results["failed"] += 1
             
             results["details"].append({
-                "file": file_path.name,
+                "file": str(file_path.relative_to(directory)),  # 상대 경로 포함
                 "result": result,
             })
         

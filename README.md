@@ -337,17 +337,32 @@ curl -X POST "http://localhost:8000/api/v1/admin/index" \
 #### 데이터 수집 및 인덱싱
 
 ```bash
-# 데이터 수집
+# 방법 1: PDF 파일에서 법령 데이터 자동 변환 (권장)
+python scripts/parse_statute_pdf.py "형법(법률)(제20908호)(20250408).pdf"
+# → data/collected/statutes/형법/ 폴더에 조문별 JSON 파일 생성
+
+# 방법 2: 데이터 수집 스크립트 사용
 python scripts/collect_data.py --type all
 
-# 수집된 데이터 인덱싱
+# 수집된 데이터 인덱싱 (하위 디렉토리 자동 검색)
 curl -X POST "http://localhost:8000/api/v1/admin/index" \
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
-    "directory": "./data/collected",
-    "pattern": "*.json"
+    "directory": "./data/collected/statutes",
+    "pattern": "*.json",
+    "chunk": true
   }'
+```
+
+**참고:** 인덱서는 하위 디렉토리를 재귀적으로 검색하므로, 법률별 폴더 구조를 사용할 수 있습니다:
+```
+data/collected/statutes/
+├── 형법/
+│   ├── statute-형법-1.json
+│   └── statute-형법-347.json
+└── 형사소송법/
+    └── statute-형사소송법-250.json
 ```
 
 ### 2. 검색 API 사용
@@ -739,44 +754,428 @@ LLM (OpenAI GPT)
 
 #### 1.2 데이터 준비 (최초 1회 또는 업데이트 시)
 
+데이터 준비는 법률 문서를 벡터 데이터베이스에 인덱싱하여 검색 가능하게 만드는 과정입니다. 이 과정은 최초 1회 또는 데이터가 업데이트될 때 수행합니다.
+
+**실행 방법:**
+
 ```bash
-# 데이터 수집
+# 방법 1: 데이터 수집 스크립트 실행 (선택사항)
 python scripts/collect_data.py --type all
 
-# 데이터 인덱싱
+# 방법 2: API를 통한 인덱싱 (권장)
+# Swagger UI (http://localhost:8000/docs)에서
+# POST /api/v1/admin/index 엔드포인트 사용
+
+# 방법 3: Python 스크립트로 직접 인덱싱
+from src.rag import DocumentIndexer
+indexer = DocumentIndexer()
+results = indexer.index_directory(
+    directory=Path("data/samples"),
+    pattern="*.json",
+    chunk=True
+)
+```
+
+**API 요청 예시:**
+
+```json
 POST /api/v1/admin/index
+Headers: {
+  "X-API-Key": "your_api_key_here",
+  "Content-Type": "application/json"
+}
+Body: {
+  "directory": "data/samples",
+  "pattern": "*.json",
+  "chunk": true
+}
 ```
 
-**처리 순서:**
+**응답 예시:**
+
+```json
+{
+  "success": true,
+  "total": 10,
+  "indexed": 9,
+  "failed": 1,
+  "details": [
+    {
+      "file": "statute-347.json",
+      "status": "success",
+      "chunks": 3,
+      "document_id": "statute-347"
+    },
+    {
+      "file": "invalid.json",
+      "status": "failed",
+      "error": "ValidationError: 필수 필드 'id'가 없습니다."
+    }
+  ]
+}
 ```
-1. JSON 파일 읽기
-   - data/samples/*.json
-   - data/collected/**/*.json
 
-2. 데이터 검증
-   - Pydantic 모델로 검증
-   - 필수 필드 확인
-   - 타입 검증
+---
 
-3. 데이터 정제
-   - 공백 제거
-   - 중복 제거
-   - 품질 검사
+**상세 처리 순서:**
 
-4. 텍스트 청킹
-   - 문서 타입별 청킹 전략 적용
-   - 법령: 조문 단위
-   - 판례: 요지 단위
-   - 매뉴얼: 섹션 단위
+##### 1단계: JSON 파일 읽기
 
-5. 임베딩 생성
-   - OpenAI Embedding API 호출
-   - 텍스트 → 벡터 변환
+시스템은 지정된 디렉토리에서 JSON 파일을 재귀적으로 검색합니다.
 
-6. 벡터 DB 저장
-   - ChromaDB에 벡터 저장
-   - 메타데이터 저장
-   - 인덱스 업데이트
+**읽는 위치:**
+- `data/samples/*.json` - 샘플 데이터
+- `data/collected/**/*.json` - 수집된 데이터 (모든 하위 디렉토리 포함)
+- `data/processed/*.json` - 처리된 데이터
+
+**처리 방식:**
+```python
+# src/rag/indexer.py
+def index_directory(self, directory: Path, pattern: str = "*.json"):
+    json_files = list(directory.rglob(pattern))  # 재귀적 검색
+    
+    for json_file in json_files:
+        with open(json_file, "r", encoding="utf-8") as f:
+            data = json.load(f)  # JSON 파싱
+            # 다음 단계로 전달
+```
+
+**지원하는 파일 형식:**
+- 단일 문서 JSON: `{"id": "...", "type": "statute", ...}`
+- 문서 배열 JSON: `[{"id": "1", ...}, {"id": "2", ...}]`
+- 배치 파일: 여러 문서를 포함하는 큰 JSON 파일
+
+---
+
+##### 2단계: 데이터 검증
+
+Pydantic 모델을 사용하여 데이터의 유효성을 검증합니다.
+
+**검증 항목:**
+
+1. **필수 필드 확인**
+   ```python
+   # 필수 필드: id, category, sub_category, type, title, content
+   if not all([doc.id, doc.category, doc.type, doc.title, doc.content]):
+       raise ValidationError("필수 필드가 누락되었습니다.")
+   ```
+
+2. **타입 검증**
+   ```python
+   # Pydantic 모델이 자동으로 타입 검증
+   # 예: id는 str, content는 str 또는 list[str]
+   document = StatuteModel(**json_data)  # 타입 불일치 시 자동 에러
+   ```
+
+3. **문서 타입별 스키마 검증**
+   - `statute`: 법령 메타데이터 검증 (law_name, article_number 등)
+   - `case`: 판례 메타데이터 검증 (case_number, court 등)
+   - `procedure`: 절차 메타데이터 검증
+   - 기타 타입별 특화 검증
+
+**검증 실패 시:**
+```json
+{
+  "status": "failed",
+  "error": "ValidationError: 'law_name' 필드가 필수입니다.",
+  "file": "statute-347.json"
+}
+```
+
+**검증 성공 시:**
+- Pydantic 모델 인스턴스로 변환
+- 타입 안전성 보장
+- 다음 단계로 전달
+
+---
+
+##### 3단계: 데이터 정제
+
+원본 데이터를 정제하여 품질을 향상시킵니다.
+
+**정제 작업:**
+
+1. **공백 및 특수문자 정리**
+   ```python
+   # 앞뒤 공백 제거
+   text = text.strip()
+   
+   # 연속된 공백을 하나로
+   text = re.sub(r'\s+', ' ', text)
+   
+   # 제어 문자 제거
+   text = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', text)
+   ```
+
+2. **중복 제거**
+   ```python
+   # 동일한 ID를 가진 문서 중복 확인
+   seen_ids = set()
+   if document.id in seen_ids:
+       logger.warning(f"중복 문서 발견: {document.id}")
+       # 처리 정책: 스킵 또는 업데이트
+   seen_ids.add(document.id)
+   ```
+
+3. **품질 검사**
+   ```python
+   # 최소 길이 확인
+   if len(document.content) < 10:
+       raise ValueError("문서 내용이 너무 짧습니다.")
+   
+   # 필수 키워드 확인 (선택사항)
+   if document.type == "statute" and "조" not in document.title:
+       logger.warning(f"법령 형식이 아닐 수 있습니다: {document.title}")
+   ```
+
+4. **인코딩 정규화**
+   ```python
+   # UTF-8로 통일
+   text = text.encode('utf-8', errors='ignore').decode('utf-8')
+   ```
+
+**정제 후:**
+- 깨끗한 텍스트 데이터
+- 중복 없는 문서 목록
+- 품질 검증 완료된 데이터
+
+---
+
+##### 4단계: 텍스트 청킹
+
+긴 문서를 검색에 적합한 크기로 분할합니다.
+
+**청킹 전략 (문서 타입별):**
+
+1. **법령 (statute) - 조문 단위**
+   ```python
+   # 조문 번호를 기준으로 분할
+   # 예: "제347조", "제348조" 등으로 구분
+   chunks = re.split(r'제\d+조', content)
+   # 각 조문을 독립적인 청크로 처리
+   ```
+
+2. **판례 (case) - 요지 단위**
+   ```python
+   # 판례의 주요 섹션별로 분할
+   # - 사건 개요
+   # - 쟁점
+   # - 판단
+   # - 결론
+   sections = ["【사건개요】", "【쟁점】", "【판단】", "【결론】"]
+   chunks = split_by_sections(content, sections)
+   ```
+
+3. **매뉴얼 (manual) - 섹션 단위**
+   ```python
+   # 마크다운 헤더나 번호를 기준으로 분할
+   # 예: "## 1. 절차", "## 2. 주의사항"
+   chunks = split_by_headers(content)
+   ```
+
+4. **기타 타입 - 고정 크기 청킹**
+   ```python
+   # 기본 청킹 전략: 고정 크기 + 오버랩
+   chunk_size = 1000  # 토큰 수
+   chunk_overlap = 200  # 겹치는 부분
+   
+   # 텍스트를 1000 토큰씩 분할하되, 200 토큰씩 겹치게
+   chunks = sliding_window_chunk(text, chunk_size, chunk_overlap)
+   ```
+
+**청킹 결과:**
+```python
+[
+  {
+    "text": "형법 제347조(사기) ① 사람을 기망하여...",
+    "metadata": {
+      "chunk_index": 0,
+      "document_id": "statute-347",
+      "document_type": "statute",
+      "chunk_type": "article",
+      "article_number": "347"
+    }
+  },
+  {
+    "text": "형법 제348조(컴퓨터등사용사기)...",
+    "metadata": {
+      "chunk_index": 1,
+      "document_id": "statute-347",
+      "document_type": "statute",
+      "chunk_type": "article",
+      "article_number": "348"
+    }
+  }
+]
+```
+
+**청킹 파라미터:**
+- `chunk_size`: 기본 1000 토큰 (설정 가능)
+- `chunk_overlap`: 기본 200 토큰 (문맥 유지)
+- `min_chunk_size`: 최소 100 토큰 (너무 작은 청크 방지)
+
+---
+
+##### 5단계: 임베딩 생성
+
+텍스트를 벡터로 변환하여 의미적 유사도를 계산할 수 있게 합니다.
+
+**임베딩 생성 과정:**
+
+1. **OpenAI Embedding API 호출**
+   ```python
+   # src/rag/embedding.py
+   def embed_texts(self, texts: List[str]) -> List[List[float]]:
+       # 배치 처리로 효율성 향상
+       response = openai.embeddings.create(
+           model=self.model,  # "text-embedding-3-large"
+           input=texts,  # 여러 텍스트를 한 번에 처리
+       )
+       return [item.embedding for item in response.data]
+   ```
+
+2. **벡터 변환**
+   ```python
+   # 텍스트 → 벡터 (1536차원 또는 3072차원)
+   text = "형법 제347조(사기)..."
+   embedding = [0.123, -0.456, 0.789, ...]  # 1536개 숫자 배열
+   ```
+
+3. **배치 처리 최적화**
+   ```python
+   # 한 번에 최대 100개 텍스트 처리 (API 제한)
+   batch_size = 100
+   for i in range(0, len(texts), batch_size):
+       batch = texts[i:i+batch_size]
+       embeddings = self.embed_texts(batch)
+       # 결과 저장
+   ```
+
+**임베딩 모델:**
+- 기본: `text-embedding-3-large` (3072차원, 높은 정확도)
+- 대안: `text-embedding-3-small` (1536차원, 빠른 속도)
+- 설정: `env.example`의 `EMBEDDING_MODEL`로 변경 가능
+
+**임베딩 결과:**
+```python
+{
+  "text": "형법 제347조(사기)...",
+  "embedding": [0.123, -0.456, 0.789, ..., 0.234],  # 3072차원 벡터
+  "model": "text-embedding-3-large",
+  "dimensions": 3072
+}
+```
+
+---
+
+##### 6단계: 벡터 DB 저장
+
+생성된 임베딩과 메타데이터를 ChromaDB에 저장합니다.
+
+**저장 과정:**
+
+1. **ChromaDB 컬렉션 확인/생성**
+   ```python
+   # src/rag/vector_store.py
+   collection = chroma_client.get_or_create_collection(
+       name="legal_documents",
+       metadata={"description": "법률 문서 벡터 저장소"}
+   )
+   ```
+
+2. **벡터 및 메타데이터 저장**
+   ```python
+   # 각 청크를 개별 문서로 저장
+   collection.add(
+       ids=[f"{doc_id}_chunk_{i}" for i in range(len(chunks))],
+       embeddings=[chunk["embedding"] for chunk in chunks],
+       documents=[chunk["text"] for chunk in chunks],
+       metadatas=[chunk["metadata"] for chunk in chunks]
+   )
+   ```
+
+3. **저장되는 메타데이터:**
+   ```python
+   {
+       "document_id": "statute-347",
+       "document_type": "statute",
+       "category": "형사",
+       "sub_category": "사기",
+       "chunk_index": 0,
+       "chunk_type": "article",
+       "article_number": "347",
+       "law_name": "형법",
+       "title": "형법 제347조(사기)"
+   }
+   ```
+
+4. **인덱스 업데이트**
+   ```python
+   # ChromaDB가 자동으로 인덱스 업데이트
+   # HNSW (Hierarchical Navigable Small World) 알고리즘 사용
+   # 빠른 유사도 검색을 위한 인덱스 구조 생성
+   ```
+
+**저장 결과:**
+```python
+{
+  "document_id": "statute-347",
+  "chunks_count": 3,
+  "status": "success",
+  "vector_ids": [
+    "statute-347_chunk_0",
+    "statute-347_chunk_1",
+    "statute-347_chunk_2"
+  ]
+}
+```
+
+**저장 위치:**
+- 로컬 파일 시스템: `./data/vector_db/` (기본값)
+- 설정: `env.example`의 `CHROMA_PERSIST_DIRECTORY`로 변경 가능
+
+---
+
+**전체 처리 흐름 다이어그램:**
+
+```
+JSON 파일
+    ↓
+[1] 파일 읽기 → JSON 파싱
+    ↓
+[2] 데이터 검증 → Pydantic 모델 변환
+    ↓
+[3] 데이터 정제 → 정제된 문서
+    ↓
+[4] 텍스트 청킹 → 청크 배열
+    ↓
+[5] 임베딩 생성 → 벡터 배열
+    ↓
+[6] 벡터 DB 저장 → 인덱싱 완료
+    ↓
+검색 가능한 상태
+```
+
+**처리 시간 예시:**
+- 소규모 (10개 문서): 약 1-2분
+- 중규모 (100개 문서): 약 10-15분
+- 대규모 (1000개 문서): 약 1-2시간
+
+**모니터링:**
+```bash
+# 인덱스 상태 확인
+GET /api/v1/admin/index/status
+
+# 응답
+{
+  "collection_name": "legal_documents",
+  "document_count": 150,
+  "indexed_documents": 150,
+  "health_status": {
+    "status": "healthy",
+    "total_chunks": 450
+  }
+}
 ```
 
 ### 2. 검색 API 작동 순서

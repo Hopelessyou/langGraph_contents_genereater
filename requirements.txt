@@ -28,3 +28,6 @@ pytest-cov>=4.1.0
 httpx>=0.25.0
 aiofiles>=23.2.0
 
+# PDF Processing
+PyPDF2>=3.0.0  # For parsing statute PDFs
+
