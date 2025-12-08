@@ -31,3 +31,7 @@ aiofiles>=23.2.0
 # PDF Processing
 PyPDF2>=3.0.0  # For parsing statute PDFs
 
+# Web Scraping (for data collection)
+beautifulsoup4>=4.12.0  # For HTML parsing in collectors
+requests>=2.31.0  # For HTTP requests in collectors
+

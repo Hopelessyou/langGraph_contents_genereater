@@ -71,6 +71,19 @@ class DocumentIndexer:
             # 문서 객체 생성 (청크별)
             chunk_documents = []
             for i, chunk_data in enumerate(chunks):
+                # metadata를 딕셔너리로 변환
+                doc_metadata = {}
+                if document.metadata:
+                    if hasattr(document.metadata, 'model_dump'):
+                        doc_metadata = document.metadata.model_dump()
+                    elif isinstance(document.metadata, dict):
+                        doc_metadata = document.metadata.copy()
+                    else:
+                        try:
+                            doc_metadata = dict(document.metadata)
+                        except (TypeError, ValueError):
+                            doc_metadata = {"raw_metadata": str(document.metadata)}
+                
                 chunk_doc = BaseDocument(
                     id=f"{document.id}_chunk_{i}",
                     category=document.category,
@@ -79,7 +92,7 @@ class DocumentIndexer:
                     title=f"{document.title} (청크 {i+1})",
                     content=chunk_data["text"],
                     metadata={
-                        **document.metadata,
+                        **doc_metadata,
                         **chunk_data["metadata"],
                     }
                 )

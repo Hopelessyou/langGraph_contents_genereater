@@ -99,7 +99,33 @@ class VectorStore:
             
             # 추가 메타데이터 병합
             if doc.metadata:
-                metadata.update(doc.metadata)
+                # Pydantic 모델인 경우 딕셔너리로 변환
+                if hasattr(doc.metadata, 'model_dump'):
+                    raw_metadata = doc.metadata.model_dump()
+                elif isinstance(doc.metadata, dict):
+                    raw_metadata = doc.metadata.copy()
+                else:
+                    # 기타 경우 dict()로 변환 시도
+                    try:
+                        raw_metadata = dict(doc.metadata)
+                    except (TypeError, ValueError):
+                        # 변환 실패 시 문자열로 변환
+                        raw_metadata = {"raw_metadata": str(doc.metadata)}
+                
+                # ChromaDB는 리스트를 지원하지 않으므로 문자열로 변환
+                for key, value in raw_metadata.items():
+                    if isinstance(value, list):
+                        # 리스트를 쉼표로 구분된 문자열로 변환
+                        metadata[key] = ", ".join(str(v) for v in value)
+                    elif isinstance(value, dict):
+                        # 딕셔너리는 JSON 문자열로 변환
+                        import json
+                        metadata[key] = json.dumps(value, ensure_ascii=False)
+                    elif value is None:
+                        # None 값은 건너뛰기
+                        continue
+                    else:
+                        metadata[key] = value
             
             metadata_list.append(metadata)
         
