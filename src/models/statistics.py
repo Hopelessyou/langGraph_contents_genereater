@@ -64,3 +64,4 @@ class StatisticsModel(BaseDocument):
             }
         }
 
+

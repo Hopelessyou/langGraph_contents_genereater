@@ -567,7 +567,196 @@ data/collected/statutes/
 
 ---
 
-### 3. API를 통한 인덱싱
+### 3. 전체 데이터 폴더 인덱싱
+
+`data` 폴더의 모든 파일을 한 번에 인덱싱하는 방법입니다.
+
+#### 방법 1: Python 스크립트 실행 (권장)
+
+프로젝트에 포함된 스크립트를 사용하여 `data` 폴더의 모든 파일을 자동으로 인덱싱할 수 있습니다.
+
+**터미널에서 실행:**
+
+```bash
+python scripts/index_all_data.py
+```
+
+**스크립트 기능:**
+- `data/processed/` 폴더의 모든 JSON 파일 인덱싱
+- `data/collected/` 폴더의 모든 JSON 파일 인덱싱
+- 하위 디렉토리까지 재귀적으로 검색
+- 진행 상황과 결과 통계 실시간 출력
+- 실패한 파일 목록 표시
+
+**실행 결과 예시:**
+```
+================================================================================
+전체 데이터 인덱싱 시작
+================================================================================
+
+================================================================================
+인덱싱 중: 처리된 데이터 (processed)
+경로: data/processed
+================================================================================
+
+✅ 처리된 데이터 (processed) 인덱싱 완료:
+   총 파일: 803개
+   성공: 803개
+   실패: 0개
+   청크 수: 2456개
+
+================================================================================
+인덱싱 중: 수집된 데이터 (collected)
+경로: data/collected
+================================================================================
+
+✅ 수집된 데이터 (collected) 인덱싱 완료:
+   총 파일: 1926개
+   성공: 1926개
+   실패: 0개
+   청크 수: 5234개
+
+================================================================================
+전체 인덱싱 완료
+================================================================================
+총 파일 수: 2729개
+성공: 2729개
+실패: 0개
+총 청크 수: 7690개
+================================================================================
+```
+
+#### 방법 2: Python 코드로 직접 실행
+
+특정 폴더만 선택적으로 인덱싱하려면 Python 코드를 사용할 수 있습니다.
+
+```python
+from pathlib import Path
+from src.rag import DocumentIndexer
+
+indexer = DocumentIndexer()
+
+# processed/cases 폴더만 인덱싱
+results = indexer.index_directory(
+    directory=Path("data/processed/cases"),
+    pattern="*.json",
+    chunk=True,
+    recursive=True
+)
+
+print(f"성공: {results['success']}/{results['total']}")
+print(f"실패: {results['failed']}개")
+```
+
+**여러 폴더를 순차적으로 인덱싱:**
+
+```python
+from pathlib import Path
+from src.rag import DocumentIndexer
+
+indexer = DocumentIndexer()
+
+# 인덱싱할 폴더 목록
+directories = [
+    "data/processed/cases",
+    "data/processed/statutes",
+    "data/collected/cases",
+]
+
+total_success = 0
+total_files = 0
+
+for directory in directories:
+    print(f"\n인덱싱 중: {directory}")
+    results = indexer.index_directory(
+        directory=Path(directory),
+        pattern="*.json",
+        chunk=True,
+        recursive=True
+    )
+    total_success += results['success']
+    total_files += results['total']
+    print(f"  성공: {results['success']}/{results['total']}")
+
+print(f"\n전체 결과: {total_success}/{total_files}개 성공")
+```
+
+#### 방법 3: API를 통한 전체 인덱싱
+
+서버가 실행 중이면 Swagger UI에서도 전체 데이터를 인덱싱할 수 있습니다.
+
+**Swagger UI 사용:**
+
+1. `http://localhost:8000/docs` 접속
+2. `POST /api/v1/admin/index` 엔드포인트 선택
+3. "Try it out" 클릭
+4. 각 디렉토리별로 요청:
+
+**processed 폴더 인덱싱:**
+```json
+{
+  "directory": "data/processed",
+  "pattern": "*.json",
+  "chunk": true
+}
+```
+
+**collected 폴더 인덱싱:**
+```json
+{
+  "directory": "data/collected",
+  "pattern": "*.json",
+  "chunk": true
+}
+```
+
+5. "Execute" 클릭
+
+**cURL 사용:**
+
+```bash
+# processed 폴더 인덱싱
+curl -X POST "http://localhost:8000/api/v1/admin/index" \
+  -H "X-API-Key: your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "directory": "data/processed",
+    "pattern": "*.json",
+    "chunk": true
+  }'
+
+# collected 폴더 인덱싱
+curl -X POST "http://localhost:8000/api/v1/admin/index" \
+  -H "X-API-Key: your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "directory": "data/collected",
+    "pattern": "*.json",
+    "chunk": true
+  }'
+```
+
+#### 주의사항
+
+1. **인덱싱 시간**: 파일 수가 많을 경우 인덱싱에 시간이 걸릴 수 있습니다.
+   - 약 1000개 파일: 10-20분
+   - 약 2000개 파일: 20-40분
+   - 약 3000개 파일: 40-60분
+
+2. **메모리 사용량**: 대량 인덱싱 시 메모리 사용량이 증가할 수 있습니다.
+
+3. **중복 인덱싱**: 같은 파일을 여러 번 인덱싱하면 중복 데이터가 생성될 수 있습니다. 기존 인덱스를 초기화하려면:
+   ```python
+   from src.rag import VectorStore
+   vector_store = VectorStore()
+   vector_store.reset()  # 주의: 모든 데이터가 삭제됩니다!
+   ```
+
+4. **증분 인덱싱**: 새로 추가된 파일만 인덱싱하려면 증분 인덱싱 기능을 사용하세요 (아래 섹션 참조).
+
+---
+
+### 4. API를 통한 인덱싱
 
 **Swagger UI 사용:**
 
@@ -619,7 +808,7 @@ print(response.json())
 
 ---
 
-### 4. 파일 업로드 및 인덱싱
+### 5. 파일 업로드 및 인덱싱
 
 **Swagger UI 사용:**
 
@@ -644,7 +833,7 @@ with open("data/samples/statute-347.json", "rb") as f:
 
 ---
 
-### 5. 증분 인덱싱
+### 6. 증분 인덱싱
 
 **새로 추가되거나 변경된 파일만 인덱싱:**
 

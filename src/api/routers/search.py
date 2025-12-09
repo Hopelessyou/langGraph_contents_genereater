@@ -4,11 +4,14 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import logging
 
 from ...rag import HybridRetriever
 from ..dependencies import get_retriever, get_query_cache
 from ...utils.cache import QueryCache
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -61,48 +64,75 @@ async def search_documents(
     try:
         
         # 메타데이터 필터 구성
+        # "string"은 Swagger UI의 기본 예시 값이므로 필터에서 제외
         metadata_filters = {}
-        if request.category:
+        if request.category and request.category != "string":
             metadata_filters["category"] = request.category
-        if request.sub_category:
+        if request.sub_category and request.sub_category != "string":
             metadata_filters["sub_category"] = request.sub_category
         
         # 캐시 확인
         search_result = None
         if settings.cache_enabled:
+            # 캐시 키에 n_results와 document_types도 포함
+            cache_filters = metadata_filters.copy() if metadata_filters else {}
+            if request.document_types:
+                cache_filters["document_types"] = request.document_types
+            cache_filters["n_results"] = request.n_results
+            
             search_result = cache.get(
                 query=request.query,
-                filters=metadata_filters if metadata_filters else None,
+                filters=cache_filters if cache_filters else None,
             )
         
         # 캐시 미스인 경우 검색 수행
         if search_result is None:
+            # document_types에 "string"이 포함되어 있으면 None으로 변환 (모든 타입 검색)
+            doc_types = request.document_types
+            if doc_types and "string" in doc_types:
+                doc_types = None
+            
             search_result = await retriever.search(
                 query=request.query,
                 n_results=request.n_results,
-                document_types=request.document_types,
+                document_types=doc_types,
                 metadata_filters=metadata_filters if metadata_filters else None,
             )
             
+            # 검색 결과 확인
+            if not search_result or not search_result.get("results"):
+                # 에러가 있는 경우 로깅
+                if search_result and search_result.get("error"):
+                    logger.error(f"검색 에러: {search_result.get('error')}")
+            
             # 캐시에 저장
             if settings.cache_enabled:
+                cache_filters = metadata_filters.copy() if metadata_filters else {}
+                if request.document_types:
+                    cache_filters["document_types"] = request.document_types
+                cache_filters["n_results"] = request.n_results
+                
                 cache.set(
                     query=request.query,
                     result=search_result,
-                    filters=metadata_filters if metadata_filters else None,
+                    filters=cache_filters if cache_filters else None,
                 )
         
         # 결과 포맷팅
-        results = [
-            SearchResult(
-                id=r.get("id", ""),
-                document=r.get("document", ""),
-                metadata=r.get("metadata", {}),
-                distance=r.get("distance"),
-                score=r.get("score"),
-            )
-            for r in search_result.get("results", [])
-        ]
+        # search_result가 None이거나 results가 없는 경우 처리
+        if not search_result:
+            results = []
+        else:
+            results = [
+                SearchResult(
+                    id=r.get("id", ""),
+                    document=r.get("document", ""),
+                    metadata=r.get("metadata", {}),
+                    distance=r.get("distance"),
+                    score=r.get("score"),
+                )
+                for r in search_result.get("results", [])
+            ]
         
         return SearchResponse(
             query=request.query,
@@ -131,6 +161,7 @@ async def search_documents_get(
     category: Optional[str] = Query(None, description="카테고리"),
     sub_category: Optional[str] = Query(None, description="하위 카테고리"),
     retriever: HybridRetriever = Depends(get_retriever),
+    cache: QueryCache = Depends(get_query_cache),
 ):
     """GET 방식 검색"""
     # 문서 타입 파싱
@@ -146,5 +177,5 @@ async def search_documents_get(
         sub_category=sub_category,
     )
     
-    return await search_documents(request, retriever=retriever)
+    return await search_documents(request, retriever=retriever, cache=cache)
 
