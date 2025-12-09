@@ -4,9 +4,11 @@ from typing import TypedDict, List, Dict, Any, Optional, Annotated
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 import logging
+import asyncio
 
 from .vector_store import VectorStore
 from .embedding import EmbeddingGenerator
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +65,22 @@ class RAGWorkflow:
         try:
             query = state.get("query", "")
             
-            # 쿼리 임베딩 생성
-            query_embedding = self.embedding_generator.embed_text(query)
+            # 쿼리 임베딩 생성 (비동기 메서드를 동기적으로 실행)
+            try:
+                loop = asyncio.get_running_loop()
+                # 이미 실행 중인 루프가 있으면 새 스레드에서 실행
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        self.embedding_generator.embed_text(query)
+                    )
+                    query_embedding = future.result()
+            except RuntimeError:
+                # 이벤트 루프가 없으면 새로 생성
+                query_embedding = asyncio.run(
+                    self.embedding_generator.embed_text(query)
+                )
             
             # 메타데이터 필터 추출 (간단한 키워드 기반)
             metadata_filters = self._extract_filters(query)
@@ -92,15 +108,36 @@ class RAGWorkflow:
                 state["error"] = "쿼리 임베딩이 없습니다."
                 return state
             
-            # 검색 수행
-            n_results = 10  # 초기 검색 결과 수
+            # 검색 수행 (비동기 메서드를 동기적으로 실행)
+            n_results = settings.search_default_top_k
             where = state.get("metadata_filters")
             
-            results = self.vector_store.search(
-                query_embedding=query_embedding,
-                n_results=n_results,
-                where=where,
-            )
+            # LangGraph는 동기적으로 실행되므로, 비동기 메서드를 동기적으로 실행
+            # 이미 실행 중인 이벤트 루프가 있으면 새 루프를 생성할 수 없으므로
+            # asyncio.to_thread를 사용하여 별도 스레드에서 실행
+            try:
+                loop = asyncio.get_running_loop()
+                # 이미 실행 중인 루프가 있으면 새 스레드에서 실행
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        self.vector_store.search(
+                            query_embedding=query_embedding,
+                            n_results=n_results,
+                            where=where,
+                        )
+                    )
+                    results = future.result()
+            except RuntimeError:
+                # 이벤트 루프가 없으면 새로 생성
+                results = asyncio.run(
+                    self.vector_store.search(
+                        query_embedding=query_embedding,
+                        n_results=n_results,
+                        where=where,
+                    )
+                )
             
             # 결과 포맷팅
             search_results = []
@@ -170,8 +207,8 @@ class RAGWorkflow:
                 key=lambda x: x.get("distance", float("inf"))
             )
             
-            # 상위 5개만 선택
-            reranked = reranked[:5]
+            # 상위 결과만 선택
+            reranked = reranked[:settings.search_rerank_top_k]
             
             state["reranked_results"] = reranked
             logger.debug(f"재랭킹 완료: {len(reranked)}개 결과")
@@ -179,7 +216,7 @@ class RAGWorkflow:
         except Exception as e:
             logger.error(f"재랭킹 실패: {str(e)}")
             state["error"] = f"재랭킹 실패: {str(e)}"
-            state["reranked_results"] = state.get("filtered_results", [])[:5]
+            state["reranked_results"] = state.get("filtered_results", [])[:settings.search_rerank_top_k]
         
         return state
     

@@ -2,6 +2,7 @@
 
 from typing import List, Optional
 import logging
+import asyncio
 
 try:
     from langchain_openai import OpenAIEmbeddings
@@ -10,6 +11,7 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 from config.settings import settings
+from ..utils.exceptions import EmbeddingError, ConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +27,30 @@ class EmbeddingGenerator:
     def _initialize(self):
         """임베딩 모델 초기화"""
         if not OPENAI_AVAILABLE:
-            raise ImportError("langchain-openai가 설치되지 않았습니다.")
+            raise ConfigurationError(
+                "langchain-openai가 설치되지 않았습니다.",
+                details={"package": "langchain-openai", "command": "pip install langchain-openai"}
+            )
         
         if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
+            raise ConfigurationError(
+                "OPENAI_API_KEY가 설정되지 않았습니다.",
+                details={"setting": "OPENAI_API_KEY"}
+            )
         
-        self.embeddings = OpenAIEmbeddings(
-            model=self.model_name,
-            openai_api_key=settings.openai_api_key,
-        )
-        logger.info(f"임베딩 모델 초기화: {self.model_name}")
+        try:
+            self.embeddings = OpenAIEmbeddings(
+                model=self.model_name,
+                openai_api_key=settings.openai_api_key,
+            )
+            logger.info(f"임베딩 모델 초기화: {self.model_name}")
+        except Exception as e:
+            raise EmbeddingError(
+                f"임베딩 모델 초기화 실패: {str(e)}",
+                details={"model": self.model_name, "error": str(e)}
+            )
     
-    def embed_text(self, text: str) -> List[float]:
+    async def embed_text(self, text: str) -> List[float]:
         """
         단일 텍스트를 임베딩합니다.
         
@@ -47,13 +61,16 @@ class EmbeddingGenerator:
             임베딩 벡터
         """
         try:
-            result = self.embeddings.embed_query(text)
+            result = await asyncio.to_thread(self.embeddings.embed_query, text)
             return result
         except Exception as e:
             logger.error(f"임베딩 생성 실패: {str(e)}")
-            raise
+            raise EmbeddingError(
+                f"임베딩 생성 실패: {str(e)}",
+                details={"text_length": len(text), "model": self.model_name, "error": str(e)}
+            ) from e
     
-    def embed_texts(self, texts: List[str]) -> List[List[float]]:
+    async def embed_texts(self, texts: List[str]) -> List[List[float]]:
         """
         여러 텍스트를 일괄 임베딩합니다.
         
@@ -64,11 +81,14 @@ class EmbeddingGenerator:
             임베딩 벡터 리스트
         """
         try:
-            results = self.embeddings.embed_documents(texts)
+            results = await asyncio.to_thread(self.embeddings.embed_documents, texts)
             return results
         except Exception as e:
             logger.error(f"일괄 임베딩 생성 실패: {str(e)}")
-            raise
+            raise EmbeddingError(
+                f"일괄 임베딩 생성 실패: {str(e)}",
+                details={"texts_count": len(texts), "model": self.model_name, "error": str(e)}
+            ) from e
     
     def get_embedding_dimension(self) -> int:
         """임베딩 차원을 반환합니다."""

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import logging
+import asyncio
 
 from ..models import BaseDocument
 from ..processors.validator import DocumentValidator
@@ -64,9 +65,23 @@ class DocumentIndexer:
                     }
                 }]
             
-            # 임베딩 생성
+            # 임베딩 생성 (비동기 메서드를 동기적으로 실행)
             texts = [chunk["text"] for chunk in chunks]
-            embeddings = self.embedding_generator.embed_texts(texts)
+            try:
+                loop = asyncio.get_running_loop()
+                # 이미 실행 중인 루프가 있으면 새 스레드에서 실행
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        self.embedding_generator.embed_texts(texts)
+                    )
+                    embeddings = future.result()
+            except RuntimeError:
+                # 이벤트 루프가 없으면 새로 생성
+                embeddings = asyncio.run(
+                    self.embedding_generator.embed_texts(texts)
+                )
             
             # 문서 객체 생성 (청크별)
             chunk_documents = []

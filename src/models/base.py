@@ -21,6 +21,7 @@ class BaseDocument(BaseModel):
         "faq",
         "keyword_mapping",
         "style_issue",
+        "statistics",
     ] = Field(..., description="문서 타입")
     title: str = Field(..., description="문서 제목")
     content: str | list[str] = Field(..., description="문서 내용 (문자열 또는 문자열 리스트)")

@@ -1,0 +1,32 @@
+{
+  "id": "crime-기타범죄-기타범죄-골재채취법",
+  "category": "형사",
+  "sub_category": "기타범죄",
+  "type": "statistics",
+  "title": "2025년 12월 골재채취법 범죄 통계 분석",
+  "content": "2025년 12월 기준 통계 분석에 따르면, '기타범죄-기타범죄-골재채취법' 범죄는 41건 발생하여 38건 검거되었으며, 검거율은 약 92.7%이다. 검거율이 높은 범죄군에 속하며, 이는 수사 접근 방식, 신고 민감도, 사건 특성 등의 영향을 받는 것으로 해석된다.",
+  "metadata": {
+    "domain": "crime-statistics",
+    "source": "경찰청 전국 범죄 발생 및 검거 현황",
+    "date": "2025-12-31",
+    "crime_category_main": "기타범죄",
+    "crime_category_mid": "기타범죄",
+    "crime_category_sub": "골재채취법",
+    "occurrence": 41,
+    "arrest": 38,
+    "arrest_rate": 92.7,
+    "arrest_male": 53,
+    "arrest_female": 6,
+    "arrest_unknown": 0,
+    "arrest_corporate": 40,
+    "tags": [
+      "기타범죄",
+      "기타범죄",
+      "골재채취법",
+      "통계",
+      "검거율"
+    ],
+    "embedding_text": "골재채취법 발생 41·검거 38·검거율 92.7%",
+    "updated_at": "2025-12-31"
+  }
+}

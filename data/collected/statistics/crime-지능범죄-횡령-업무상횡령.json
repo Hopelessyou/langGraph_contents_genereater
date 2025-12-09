@@ -1,0 +1,32 @@
+{
+  "id": "crime-지능범죄-횡령-업무상횡령",
+  "category": "형사",
+  "sub_category": "지능범죄",
+  "type": "statistics",
+  "title": "2025년 12월 업무상횡령 범죄 통계 분석",
+  "content": "2025년 12월 기준 통계 분석에 따르면, '지능범죄-횡령-업무상횡령' 범죄는 5167건 발생하여 4361건 검거되었으며, 검거율은 약 84.4%이다. 검거율이 높은 범죄군에 속하며, 이는 수사 접근 방식, 신고 민감도, 사건 특성 등의 영향을 받는 것으로 해석된다.",
+  "metadata": {
+    "domain": "crime-statistics",
+    "source": "경찰청 전국 범죄 발생 및 검거 현황",
+    "date": "2025-12-31",
+    "crime_category_main": "지능범죄",
+    "crime_category_mid": "횡령",
+    "crime_category_sub": "업무상횡령",
+    "occurrence": 5167,
+    "arrest": 4361,
+    "arrest_rate": 84.4,
+    "arrest_male": 5196,
+    "arrest_female": 1443,
+    "arrest_unknown": 87,
+    "arrest_corporate": 23,
+    "tags": [
+      "지능범죄",
+      "횡령",
+      "업무상횡령",
+      "통계",
+      "검거율"
+    ],
+    "embedding_text": "업무상횡령 발생 5167·검거 4361·검거율 84.4%",
+    "updated_at": "2025-12-31"
+  }
+}

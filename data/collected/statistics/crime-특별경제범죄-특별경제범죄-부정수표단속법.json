@@ -1,0 +1,32 @@
+{
+  "id": "crime-특별경제범죄-특별경제범죄-부정수표단속법",
+  "category": "형사",
+  "sub_category": "특별경제범죄",
+  "type": "statistics",
+  "title": "2025년 12월 부정수표단속법 범죄 통계 분석",
+  "content": "2025년 12월 기준 통계 분석에 따르면, '특별경제범죄-특별경제범죄-부정수표단속법' 범죄는 535건 발생하여 278건 검거되었으며, 검거율은 약 52.0%이다. 검거율이 낮은 범죄군에 속하며, 이는 수사 접근 방식, 신고 민감도, 사건 특성 등의 영향을 받는 것으로 해석된다.",
+  "metadata": {
+    "domain": "crime-statistics",
+    "source": "경찰청 전국 범죄 발생 및 검거 현황",
+    "date": "2025-12-31",
+    "crime_category_main": "특별경제범죄",
+    "crime_category_mid": "특별경제범죄",
+    "crime_category_sub": "부정수표단속법",
+    "occurrence": 535,
+    "arrest": 278,
+    "arrest_rate": 52.0,
+    "arrest_male": 301,
+    "arrest_female": 40,
+    "arrest_unknown": 12,
+    "arrest_corporate": 11,
+    "tags": [
+      "특별경제범죄",
+      "특별경제범죄",
+      "부정수표단속법",
+      "통계",
+      "검거율"
+    ],
+    "embedding_text": "부정수표단속법 발생 535·검거 278·검거율 52.0%",
+    "updated_at": "2025-12-31"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "id": "crime-기타범죄-기타범죄-공유수면관리및매립에관한법률위반",
+  "category": "형사",
+  "sub_category": "기타범죄",
+  "type": "statistics",
+  "title": "2025년 12월 공유수면관리및매립에관한법률위반 범죄 통계 분석",
+  "content": "2025년 12월 기준 통계 분석에 따르면, '기타범죄-기타범죄-공유수면관리및매립에관한법률위반' 범죄는 7165건 발생하여 7159건 검거되었으며, 검거율은 약 99.9%이다. 검거율이 높은 범죄군에 속하며, 이는 수사 접근 방식, 신고 민감도, 사건 특성 등의 영향을 받는 것으로 해석된다.",
+  "metadata": {
+    "domain": "crime-statistics",
+    "source": "경찰청 전국 범죄 발생 및 검거 현황",
+    "date": "2025-12-31",
+    "crime_category_main": "기타범죄",
+    "crime_category_mid": "기타범죄",
+    "crime_category_sub": "공유수면관리및매립에관한법률위반",
+    "occurrence": 7165,
+    "arrest": 7159,
+    "arrest_rate": 99.9,
+    "arrest_male": 217,
+    "arrest_female": 37,
+    "arrest_unknown": 0,
+    "arrest_corporate": 23,
+    "tags": [
+      "기타범죄",
+      "기타범죄",
+      "공유수면관리및매립에관한법률위반",
+      "통계",
+      "검거율"
+    ],
+    "embedding_text": "공유수면관리및매립에관한법률위반 발생 7165·검거 7159·검거율 99.9%",
+    "updated_at": "2025-12-31"
+  }
+}

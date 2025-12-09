@@ -30,11 +30,15 @@ IBS 법률 AI 시스템은 법령, 판례, 절차 매뉴얼 등 다양한 법률
 
 - **10가지 법률 문서 타입 지원**: 법령, 판례, 절차 매뉴얼, 실무 매뉴얼, 사건 유형, 템플릿, 양형기준, FAQ, 키워드 맵핑, 스타일 문제
 - **하이브리드 검색**: 벡터 검색과 키워드 검색을 결합한 고성능 검색
-- **대화형 질의응답**: 멀티 턴 대화 지원 및 컨텍스트 관리
+- **대화형 질의응답**: 멀티 턴 대화 지원 및 컨텍스트 관리 (Redis 세션 지원)
 - **실시간 스트리밍**: Server-Sent Events를 통한 실시간 응답 스트리밍
 - **자동 분류 및 추천**: 키워드 기반 자동 분류 및 관련 문서 추천
 - **스타일 검증**: 법률 용어 정확성 검사 및 문법 검증
 - **모니터링 및 로깅**: 구조화된 로깅 및 성능 메트릭 수집
+- **고급 청킹 전략**: 조문 단위 분할, 항목 단위 분할, 섹션 단위 분할
+- **쿼리 캐싱**: 자주 검색되는 쿼리 결과 캐싱으로 성능 향상
+- **경로별 Rate Limiting**: 엔드포인트별 세분화된 요청 제한
+- **비동기 처리**: 모든 I/O 작업 비동기 처리로 높은 성능
 
 ## ✨ 주요 기능
 
@@ -64,12 +68,17 @@ IBS 법률 AI 시스템은 법령, 판례, 절차 매뉴얼 등 다양한 법률
 - **사건 유형 추천**: 관련 사건 유형 추천
 - **템플릿 매칭**: 적합한 템플릿 자동 매칭
 - **스타일 검증**: 법률 용어 정확성 및 문법 검증
+- **쿼리 캐싱**: 자주 검색되는 쿼리 결과 캐싱 (LRU, TTL 지원)
+- **Redis 세션 관리**: 분산 환경에서 세션 공유 (선택사항)
+- **경로별 Rate Limiting**: 엔드포인트별 세분화된 요청 제한
 
 ### 5. 모니터링
 - **구조화된 로깅**: JSON 형식 로그 저장
 - **성능 메트릭**: 검색 성능, LLM 사용량 추적
 - **에러 알림**: 임계값 기반 자동 알림
 - **API 모니터링**: 요청 수, 응답 시간 등 통계
+- **커스텀 예외 처리**: 표준화된 에러 응답 및 로깅
+- **캐시 통계**: 캐시 히트율, 사용량 모니터링
 
 ## 🛠 기술 스택
 
@@ -90,11 +99,16 @@ IBS 법률 AI 시스템은 법령, 판례, 절차 매뉴얼 등 다양한 법률
 - **pytest**: 테스트 프레임워크
 - **pytest-asyncio**: 비동기 테스트
 - **pytest-cov**: 코드 커버리지
+- **pytest-mock**: Mock 객체 지원
+- **Mock 기반 테스트**: OpenAI API 호출 없이 단위 테스트 실행 가능
 
 ### 배포
 - **Docker**: 컨테이너화
 - **docker-compose**: 다중 컨테이너 관리
 - **GitHub Actions**: CI/CD 파이프라인
+
+### 인프라 (선택사항)
+- **Redis**: 세션 관리 및 캐싱 (선택사항, 없으면 메모리 사용)
 
 ## 📁 프로젝트 구조
 
@@ -152,10 +166,12 @@ ibs_legal_ai_system/
 │   │   ├── main.py              # FastAPI 앱
 │   │   ├── auth.py              # 인증
 │   │   ├── middleware.py        # 미들웨어
+│   │   ├── dependencies.py     # 의존성 주입
 │   │   └── routers/             # 라우터
 │   │       ├── health.py        # 헬스체크
 │   │       ├── search.py        # 검색 API
 │   │       ├── ask.py           # 질의응답 API
+│   │       ├── generate.py      # 콘텐츠 생성 API
 │   │       ├── admin.py         # 관리자 API
 │   │       └── monitoring.py    # 모니터링 API
 │   │
@@ -163,7 +179,9 @@ ibs_legal_ai_system/
 │       ├── logging_config.py   # 로깅 설정
 │       ├── monitoring.py        # 모니터링
 │       ├── error_logger.py      # 에러 로깅
-│       └── alert_system.py      # 알림 시스템
+│       ├── alert_system.py      # 알림 시스템
+│       ├── exceptions.py       # 커스텀 예외
+│       └── cache.py             # 쿼리 캐싱
 │
 ├── config/                       # 설정
 │   └── settings.py              # 애플리케이션 설정
@@ -172,10 +190,13 @@ ibs_legal_ai_system/
 │   ├── test_models.py          # 모델 테스트
 │   ├── test_processors.py      # 프로세서 테스트
 │   ├── test_rag.py             # RAG 테스트
-│   ├── test_api.py             # API 테스트
+│   ├── test_api.py             # API 테스트 (Mock 사용)
+│   ├── test_embedding.py       # 임베딩 테스트 (Mock)
+│   ├── test_llm_manager.py     # LLM 관리자 테스트 (Mock)
+│   ├── test_retriever.py       # 검색기 테스트 (Mock)
 │   ├── test_integration.py     # 통합 테스트
 │   ├── test_performance.py     # 성능 테스트
-│   └── conftest.py             # pytest 설정
+│   └── conftest.py             # pytest 설정 및 Mock 픽스처
 │
 ├── data/                         # 데이터
 │   ├── samples/                # 샘플 데이터
@@ -202,10 +223,15 @@ ibs_legal_ai_system/
 ├── Dockerfile                   # Docker 이미지
 ├── docker-compose.yml           # Docker Compose 설정
 ├── requirements.txt             # Python 의존성
-├── pytest.ini                   # pytest 설정
+├── pytest.ini                   # pytest 설정 (커버리지 포함)
 ├── .env.example                 # 환경 변수 예시
 ├── .gitignore                   # Git 무시 파일
 ├── 제작_순서_계획서.md          # 제작 계획서
+├── CODE_ANALYSIS.md            # 코드 분석 문서
+├── USAGE_GUIDE.md              # 사용 가이드
+├── SWAGGER_UI_GUIDE.md         # Swagger UI 가이드
+├── RAG_DATA_BUILD_GUIDE.md     # RAG 데이터 구축 가이드
+├── DOCKER_VS_LOCAL.md          # Docker vs 로컬 실행 비교
 └── README.md                    # 이 파일
 ```
 
@@ -277,6 +303,30 @@ API_RELOAD=true
 
 # 인증
 API_KEY=your_api_key_here
+
+# CORS 설정
+CORS_ORIGINS=*  # 개발: "*", 프로덕션: "https://example.com,https://app.example.com"
+
+# Rate Limiting 설정
+RATE_LIMIT_DEFAULT=60  # 기본 요청 수/분
+RATE_LIMIT_ASK=30      # 질의응답 엔드포인트
+RATE_LIMIT_SEARCH=100  # 검색 엔드포인트
+RATE_LIMIT_GENERATE=20 # 콘텐츠 생성 엔드포인트
+RATE_LIMIT_ADMIN=10    # 관리자 엔드포인트
+
+# 검색 설정
+SEARCH_DEFAULT_TOP_K=10    # 초기 검색 결과 수
+SEARCH_RERANK_TOP_K=5      # 재랭킹 후 상위 결과 수
+SEARCH_MAX_RESULTS=20      # 최대 검색 결과 수
+
+# 캐시 설정
+CACHE_ENABLED=true    # 캐시 활성화 여부
+CACHE_MAX_SIZE=1000   # 최대 캐시 항목 수
+CACHE_TTL=3600        # 캐시 TTL (초, 기본값: 1시간)
+
+# 세션 설정
+SESSION_MAX_TURNS=3   # 세션 히스토리 최대 턴 수
+REDIS_URL=            # Redis URL (선택사항, 예: "redis://localhost:6379/0")
 
 # 로깅
 LOG_LEVEL=INFO
@@ -562,21 +612,32 @@ flake8 src/ tests/
 ### 테스트 실행
 
 ```bash
-# 모든 테스트
+# 모든 테스트 (Mock 사용, OpenAI API 호출 없음)
 pytest
 
 # 특정 테스트 파일
 pytest tests/test_models.py
 
-# 커버리지 포함
+# 커버리지 포함 (자동 리포트 생성)
 pytest --cov=src --cov-report=html
+# → htmlcov/index.html에서 커버리지 리포트 확인
 
-# 통합 테스트만
-pytest -m integration
+# 통합 테스트만 (실제 DB/API 사용)
+pytest --run-integration -m integration
 
 # 성능 테스트
 pytest -m slow
+
+# 특정 마커만 실행
+pytest -m unit  # 단위 테스트만
+pytest -m "not integration"  # 통합 테스트 제외
 ```
+
+**테스트 특징:**
+- **Mock 객체 활용**: OpenAI API 호출 없이 단위 테스트 실행
+- **자동 커버리지 측정**: 최소 60% 커버리지 목표
+- **비동기 테스트 지원**: pytest-asyncio로 비동기 코드 테스트
+- **통합 테스트 분리**: `--run-integration` 플래그로 선택적 실행
 
 ### 코드 구조
 
@@ -949,21 +1010,23 @@ Pydantic 모델을 사용하여 데이터의 유효성을 검증합니다.
 
 1. **법령 (statute) - 조문 단위**
    ```python
-   # 조문 번호를 기준으로 분할
-   # 예: "제347조", "제348조" 등으로 구분
-   chunks = re.split(r'제\d+조', content)
+   # "제X조" 패턴으로 정확히 조문 단위 분할
+   # 예: "제347조", "제348조", "제1조의2" 등으로 구분
+   chunks = split_by_article_pattern(content)
    # 각 조문을 독립적인 청크로 처리
+   # 옵션: 조문 내 항목(①②③) 단위로도 분할 가능
    ```
 
-2. **판례 (case) - 요지 단위**
+2. **판례 (case) - 섹션 단위**
    ```python
    # 판례의 주요 섹션별로 분할
-   # - 사건 개요
-   # - 쟁점
-   # - 판단
-   # - 결론
-   sections = ["【사건개요】", "【쟁점】", "【판단】", "【결론】"]
+   # - 【사건 개요】/【사건의 요지】
+   # - 【판결 요지】/【판결 요약】
+   # - 【판결 이유】/【판단】
+   # - 【참조 조문】/【관련 법령】
+   sections = ["【사건개요】", "【판결요지】", "【판결이유】", "【참조조문】"]
    chunks = split_by_sections(content, sections)
+   # 섹션 타입 자동 분류 (overview, summary, reasoning, reference)
    ```
 
 3. **매뉴얼 (manual) - 섹션 단위**
@@ -1565,11 +1628,14 @@ POST /api/v1/admin/index/incremental
 
 ### 9. 성능 최적화 포인트
 
-1. **캐싱**: 자주 검색되는 쿼리 결과 캐싱
+1. **쿼리 캐싱**: 자주 검색되는 쿼리 결과 LRU 캐시 (TTL 지원)
 2. **배치 처리**: 여러 임베딩을 한 번에 생성
-3. **비동기 처리**: I/O 작업 비동기 처리
+3. **비동기 처리**: 모든 I/O 작업 비동기 처리 (asyncio.to_thread)
 4. **연결 풀링**: 벡터 DB 연결 재사용
 5. **인덱스 최적화**: 벡터 DB 인덱스 튜닝
+6. **의존성 주입**: FastAPI Depends로 서비스 인스턴스 재사용
+7. **경로별 Rate Limiting**: 엔드포인트별 최적화된 요청 제한
+8. **Redis 세션 관리**: 분산 환경에서 세션 공유 및 성능 향상
 
 ### 10. 데이터 흐름도
 
@@ -1598,6 +1664,11 @@ POST /api/v1/admin/index/incremental
 ## 📚 참고 자료
 
 - [제작 순서 계획서](./제작_순서_계획서.md)
+- [코드 분석 문서](./CODE_ANALYSIS.md)
+- [사용 가이드](./USAGE_GUIDE.md)
+- [Swagger UI 가이드](./SWAGGER_UI_GUIDE.md)
+- [RAG 데이터 구축 가이드](./RAG_DATA_BUILD_GUIDE.md)
+- [Docker vs 로컬 실행 비교](./DOCKER_VS_LOCAL.md)
 - [사용자 가이드](./docs/user_guide.md)
 - [개발자 가이드](./docs/developer_guide.md)
 - [데이터 스키마](./docs/data_schema.md)

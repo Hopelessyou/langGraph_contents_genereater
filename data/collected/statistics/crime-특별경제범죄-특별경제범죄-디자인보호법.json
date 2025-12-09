@@ -1,0 +1,32 @@
+{
+  "id": "crime-특별경제범죄-특별경제범죄-디자인보호법",
+  "category": "형사",
+  "sub_category": "특별경제범죄",
+  "type": "statistics",
+  "title": "2025년 12월 디자인보호법 범죄 통계 분석",
+  "content": "2025년 12월 기준 통계 분석에 따르면, '특별경제범죄-특별경제범죄-디자인보호법' 범죄는 140건 발생하여 97건 검거되었으며, 검거율은 약 69.3%이다. 검거율이 낮은 범죄군에 속하며, 이는 수사 접근 방식, 신고 민감도, 사건 특성 등의 영향을 받는 것으로 해석된다.",
+  "metadata": {
+    "domain": "crime-statistics",
+    "source": "경찰청 전국 범죄 발생 및 검거 현황",
+    "date": "2025-12-31",
+    "crime_category_main": "특별경제범죄",
+    "crime_category_mid": "특별경제범죄",
+    "crime_category_sub": "디자인보호법",
+    "occurrence": 140,
+    "arrest": 97,
+    "arrest_rate": 69.3,
+    "arrest_male": 76,
+    "arrest_female": 62,
+    "arrest_unknown": 3,
+    "arrest_corporate": 26,
+    "tags": [
+      "특별경제범죄",
+      "특별경제범죄",
+      "디자인보호법",
+      "통계",
+      "검거율"
+    ],
+    "embedding_text": "디자인보호법 발생 140·검거 97·검거율 69.3%",
+    "updated_at": "2025-12-31"
+  }
+}

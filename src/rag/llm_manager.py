@@ -50,6 +50,7 @@ class LLMManager:
         context: str,
         query: str,
         document_types: Optional[list] = None,
+        system_prompt: Optional[str] = None,
         stream: bool = False,
     ) -> str:
         """
@@ -59,6 +60,7 @@ class LLMManager:
             context: 컨텍스트
             query: 사용자 쿼리
             document_types: 문서 타입 리스트
+            system_prompt: 커스텀 시스템 프롬프트 (None이면 기본 프롬프트 사용)
             stream: 스트리밍 여부
             
         Returns:
@@ -68,16 +70,25 @@ class LLMManager:
             # 컨텍스트 최적화
             optimized_context = ContextOptimizer.optimize_context(context)
             
+            # 시스템 프롬프트 선택
+            system_prompt_text = system_prompt or PromptTemplates.SYSTEM_PROMPT
+            
             # 프롬프트 구성
-            user_prompt = PromptTemplates.build_user_prompt(
-                context=optimized_context,
-                query=query,
-                document_types=document_types,
-            )
+            # query가 이미 완전한 프롬프트인 경우 (콘텐츠 생성 등) 그대로 사용
+            if "\n참고 문서:" in query or len(query) > 500:
+                # 이미 완전한 프롬프트로 보임
+                user_prompt = query.replace("{context}", optimized_context)
+            else:
+                # 일반 질의응답 프롬프트 구성
+                user_prompt = PromptTemplates.build_user_prompt(
+                    context=optimized_context,
+                    query=query,
+                    document_types=document_types,
+                )
             
             # 메시지 구성
             messages = [
-                SystemMessage(content=PromptTemplates.SYSTEM_PROMPT),
+                SystemMessage(content=system_prompt_text),
                 HumanMessage(content=user_prompt),
             ]
             

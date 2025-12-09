@@ -1,0 +1,32 @@
+{
+  "id": "crime-기타범죄-기타범죄-옥외광고물법위반",
+  "category": "형사",
+  "sub_category": "기타범죄",
+  "type": "statistics",
+  "title": "2025년 12월 옥외광고물법위반 범죄 통계 분석",
+  "content": "2025년 12월 기준 통계 분석에 따르면, '기타범죄-기타범죄-옥외광고물법위반' 범죄는 152건 발생하여 135건 검거되었으며, 검거율은 약 88.8%이다. 검거율이 높은 범죄군에 속하며, 이는 수사 접근 방식, 신고 민감도, 사건 특성 등의 영향을 받는 것으로 해석된다.",
+  "metadata": {
+    "domain": "crime-statistics",
+    "source": "경찰청 전국 범죄 발생 및 검거 현황",
+    "date": "2025-12-31",
+    "crime_category_main": "기타범죄",
+    "crime_category_mid": "기타범죄",
+    "crime_category_sub": "옥외광고물법위반",
+    "occurrence": 152,
+    "arrest": 135,
+    "arrest_rate": 88.8,
+    "arrest_male": 147,
+    "arrest_female": 22,
+    "arrest_unknown": 3,
+    "arrest_corporate": 18,
+    "tags": [
+      "기타범죄",
+      "기타범죄",
+      "옥외광고물법위반",
+      "통계",
+      "검거율"
+    ],
+    "embedding_text": "옥외광고물법위반 발생 152·검거 135·검거율 88.8%",
+    "updated_at": "2025-12-31"
+  }
+}

@@ -1,36 +1,27 @@
 """검색 API"""
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from ...rag import HybridRetriever, VectorStore, EmbeddingGenerator
+from ...rag import HybridRetriever
+from ..dependencies import get_retriever, get_query_cache
+from ...utils.cache import QueryCache
+from config.settings import settings
 
 router = APIRouter()
-
-# 전역 검색기 인스턴스 (실제로는 의존성 주입 사용 권장)
-_vector_store = None
-_embedding_gen = None
-_retriever = None
-
-
-def get_retriever() -> HybridRetriever:
-    """검색기 인스턴스 가져오기"""
-    global _vector_store, _embedding_gen, _retriever
-    
-    if _retriever is None:
-        _vector_store = VectorStore()
-        _embedding_gen = EmbeddingGenerator()
-        _retriever = HybridRetriever(_vector_store, _embedding_gen)
-    
-    return _retriever
 
 
 class SearchRequest(BaseModel):
     """검색 요청"""
     query: str = Field(..., description="검색 쿼리")
-    n_results: int = Field(default=5, ge=1, le=20, description="반환할 결과 수")
+    n_results: int = Field(
+        default=settings.search_default_results, 
+        ge=1, 
+        le=settings.search_max_results, 
+        description="반환할 결과 수"
+    )
     document_types: Optional[List[str]] = Field(
         None,
         description="문서 타입 필터 (statute, case, procedure 등)"
@@ -57,14 +48,17 @@ class SearchResponse(BaseModel):
 
 
 @router.post("/search", response_model=SearchResponse)
-async def search_documents(request: SearchRequest):
+async def search_documents(
+    request: SearchRequest,
+    retriever: HybridRetriever = Depends(get_retriever),
+    cache: QueryCache = Depends(get_query_cache),
+):
     """
     문서 검색
     
     벡터 검색을 통해 관련 법률 문서를 검색합니다.
     """
     try:
-        retriever = get_retriever()
         
         # 메타데이터 필터 구성
         metadata_filters = {}
@@ -73,13 +67,30 @@ async def search_documents(request: SearchRequest):
         if request.sub_category:
             metadata_filters["sub_category"] = request.sub_category
         
-        # 검색 수행
-        search_result = retriever.search(
-            query=request.query,
-            n_results=request.n_results,
-            document_types=request.document_types,
-            metadata_filters=metadata_filters if metadata_filters else None,
-        )
+        # 캐시 확인
+        search_result = None
+        if settings.cache_enabled:
+            search_result = cache.get(
+                query=request.query,
+                filters=metadata_filters if metadata_filters else None,
+            )
+        
+        # 캐시 미스인 경우 검색 수행
+        if search_result is None:
+            search_result = await retriever.search(
+                query=request.query,
+                n_results=request.n_results,
+                document_types=request.document_types,
+                metadata_filters=metadata_filters if metadata_filters else None,
+            )
+            
+            # 캐시에 저장
+            if settings.cache_enabled:
+                cache.set(
+                    query=request.query,
+                    result=search_result,
+                    filters=metadata_filters if metadata_filters else None,
+                )
         
         # 결과 포맷팅
         results = [
@@ -110,10 +121,16 @@ async def search_documents(request: SearchRequest):
 @router.get("/search", response_model=SearchResponse)
 async def search_documents_get(
     query: str = Query(..., description="검색 쿼리"),
-    n_results: int = Query(default=5, ge=1, le=20, description="반환할 결과 수"),
+    n_results: int = Query(
+        default=settings.search_default_results, 
+        ge=1, 
+        le=settings.search_max_results, 
+        description="반환할 결과 수"
+    ),
     document_types: Optional[str] = Query(None, description="문서 타입 (쉼표로 구분)"),
     category: Optional[str] = Query(None, description="카테고리"),
     sub_category: Optional[str] = Query(None, description="하위 카테고리"),
+    retriever: HybridRetriever = Depends(get_retriever),
 ):
     """GET 방식 검색"""
     # 문서 타입 파싱
@@ -129,5 +146,5 @@ async def search_documents_get(
         sub_category=sub_category,
     )
     
-    return await search_documents(request)
+    return await search_documents(request, retriever=retriever)
 

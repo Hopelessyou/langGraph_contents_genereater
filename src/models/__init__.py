@@ -11,6 +11,7 @@ from .sentencing_guideline import SentencingGuidelineModel, SentencingGuidelineM
 from .faq import FAQModel, FAQMetadata
 from .keyword_mapping import KeywordMappingModel, KeywordMappingMetadata
 from .style_issue import StyleIssueModel, StyleIssueMetadata
+from .statistics import StatisticsModel, StatisticsMetadata
 
 __all__ = [
     "BaseDocument",
@@ -34,4 +35,6 @@ __all__ = [
     "KeywordMappingMetadata",
     "StyleIssueModel",
     "StyleIssueMetadata",
+    "StatisticsModel",
+    "StatisticsMetadata",
 ]

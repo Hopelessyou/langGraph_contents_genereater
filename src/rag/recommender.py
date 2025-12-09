@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Any, Optional
 import logging
+import asyncio
 
 from .vector_store import VectorStore
 from .embedding import EmbeddingGenerator
@@ -95,14 +96,41 @@ class DocumentRecommender:
             # 키워드를 조합하여 쿼리 생성
             query = " ".join(keywords)
             
-            # 임베딩 생성
-            query_embedding = self.embedding_generator.embed_text(query)
+            # 임베딩 생성 (비동기 메서드를 동기적으로 실행)
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        self.embedding_generator.embed_text(query)
+                    )
+                    query_embedding = future.result()
+            except RuntimeError:
+                query_embedding = asyncio.run(
+                    self.embedding_generator.embed_text(query)
+                )
             
-            # 검색
-            results = self.vector_store.search(
-                query_embedding=query_embedding,
-                n_results=n_results,
-            )
+            # 검색 (비동기 메서드를 동기적으로 실행)
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        self.vector_store.search(
+                            query_embedding=query_embedding,
+                            n_results=n_results,
+                        )
+                    )
+                    results = future.result()
+            except RuntimeError:
+                results = asyncio.run(
+                    self.vector_store.search(
+                        query_embedding=query_embedding,
+                        n_results=n_results,
+                    )
+                )
             
             # 결과 포맷팅
             recommendations = []

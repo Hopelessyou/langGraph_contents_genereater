@@ -1,6 +1,6 @@
 """질의응답 API"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, AsyncIterator
@@ -11,32 +11,16 @@ from ...rag import (
     HybridRetriever,
     LLMManager,
     SessionManager,
-    VectorStore,
-    EmbeddingGenerator,
 )
 
+from ..dependencies import (
+    get_retriever,
+    get_llm_manager,
+    get_session_manager,
+)
+from config.settings import settings
+
 router = APIRouter()
-
-# 전역 인스턴스
-_vector_store = None
-_embedding_gen = None
-_retriever = None
-_llm_manager = None
-_session_manager = None
-
-
-def get_services():
-    """서비스 인스턴스 가져오기"""
-    global _vector_store, _embedding_gen, _retriever, _llm_manager, _session_manager
-    
-    if _retriever is None:
-        _vector_store = VectorStore()
-        _embedding_gen = EmbeddingGenerator()
-        _retriever = HybridRetriever(_vector_store, _embedding_gen)
-        _llm_manager = LLMManager()
-        _session_manager = SessionManager()
-    
-    return _retriever, _llm_manager, _session_manager
 
 
 class AskRequest(BaseModel):
@@ -66,14 +50,18 @@ class AskResponse(BaseModel):
 
 
 @router.post("/ask", response_model=AskResponse)
-async def ask_question(request: AskRequest):
+async def ask_question(
+    request: AskRequest,
+    retriever: HybridRetriever = Depends(get_retriever),
+    llm_manager: LLMManager = Depends(get_llm_manager),
+    session_manager: SessionManager = Depends(get_session_manager),
+):
     """
     질의응답
     
     사용자의 질문에 대해 RAG 기반으로 답변을 생성합니다.
     """
     try:
-        retriever, llm_manager, session_manager = get_services()
         
         # 세션 가져오기 또는 생성
         if request.session_id:
@@ -84,13 +72,13 @@ async def ask_question(request: AskRequest):
             session = session_manager.create_session()
         
         # 이전 대화 히스토리 가져오기
-        history = session.get_history(max_turns=3)
-        context_from_history = session.get_context_string(max_turns=3)
+        history = session.get_history(max_turns=settings.session_max_turns)
+        context_from_history = session.get_context_string(max_turns=settings.session_max_turns)
         
         # 검색 수행
-        search_result = retriever.search(
+        search_result = await retriever.search(
             query=request.query,
-            n_results=5,
+            n_results=settings.search_default_results,
             document_types=request.document_types,
         )
         
@@ -113,6 +101,7 @@ async def ask_question(request: AskRequest):
         # 세션에 메시지 추가
         session.add_message("user", request.query)
         session.add_message("assistant", response_text)
+        session_manager.update_session(session)  # Redis에 저장
         
         # 출처 정보 추출
         sources = [
@@ -121,7 +110,7 @@ async def ask_question(request: AskRequest):
                 "title": r.get("metadata", {}).get("title", ""),
                 "type": r.get("metadata", {}).get("type", ""),
             }
-            for r in search_result.get("results", [])[:3]
+            for r in search_result.get("results", [])[:settings.search_max_sources]
         ]
         
         return AskResponse(
@@ -140,14 +129,18 @@ async def ask_question(request: AskRequest):
 
 
 @router.post("/ask/stream")
-async def ask_question_stream(request: AskRequest):
+async def ask_question_stream(
+    request: AskRequest,
+    retriever: HybridRetriever = Depends(get_retriever),
+    llm_manager: LLMManager = Depends(get_llm_manager),
+    session_manager: SessionManager = Depends(get_session_manager),
+):
     """
     스트리밍 질의응답
     
     실시간으로 스트리밍 응답을 반환합니다.
     """
     try:
-        retriever, llm_manager, session_manager = get_services()
         
         # 세션 가져오기 또는 생성
         if request.session_id:
@@ -158,33 +151,37 @@ async def ask_question_stream(request: AskRequest):
             session = session_manager.create_session()
         
         # 검색 수행
-        search_result = retriever.search(
+        search_result = await retriever.search(
             query=request.query,
-            n_results=5,
+            n_results=settings.search_default_results,
             document_types=request.document_types,
         )
         
         # 컨텍스트 구성
         context = search_result.get("context", "")
-        history = session.get_context_string(max_turns=3)
+        history = session.get_context_string(max_turns=settings.session_max_turns)
         if history:
             context = f"이전 대화:\n{history}\n\n관련 문서:\n{context}"
         
         # 스트리밍 응답 생성
         async def generate_stream() -> AsyncIterator[str]:
+            full_response = ""  # 전체 응답 수집
+            
             async for chunk in llm_manager.generate_response_async(
                 context=context,
                 query=request.query,
                 document_types=request.document_types,
             ):
+                full_response += chunk  # 청크를 모아서 전체 응답 구성
                 yield f"data: {json.dumps({'chunk': chunk})}\n\n"
             
-            # 세션에 메시지 추가
-            full_response = ""  # 실제로는 청크를 모아야 함
+            # 스트리밍 완료 후 세션에 전체 응답 저장
             session.add_message("user", request.query)
             session.add_message("assistant", full_response)
+            session_manager.update_session(session)  # Redis에 저장
             
-            yield f"data: {json.dumps({'done': True})}\n\n"
+            # 완료 신호와 전체 응답 전송
+            yield f"data: {json.dumps({'done': True, 'full_response': full_response})}\n\n"
         
         return StreamingResponse(
             generate_stream(),

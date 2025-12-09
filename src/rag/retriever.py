@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Any, Optional
 import logging
+import asyncio
 
 from .vector_store import VectorStore
 from .embedding import EmbeddingGenerator
@@ -22,7 +23,7 @@ class HybridRetriever:
         self.embedding_generator = embedding_generator
         self.workflow = RAGWorkflow(vector_store, embedding_generator)
     
-    def search(
+    async def search(
         self,
         query: str,
         n_results: int = 5,
@@ -42,8 +43,9 @@ class HybridRetriever:
             검색 결과
         """
         try:
-            # 워크플로우 실행
-            result = self.workflow.run(
+            # 워크플로우 실행 (동기 함수를 비동기로 실행)
+            result = await asyncio.to_thread(
+                self.workflow.run,
                 query=query,
                 metadata_filters=metadata_filters,
                 document_types=document_types,

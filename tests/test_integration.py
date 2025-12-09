@@ -3,6 +3,7 @@
 import pytest
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from src.processors import DocumentValidator, BatchProcessor
 from src.rag import DocumentIndexer, VectorStore, EmbeddingGenerator
@@ -41,20 +42,53 @@ class TestDataPipeline:
 class TestRAGWorkflow:
     """RAG 워크플로우 통합 테스트"""
     
-    @pytest.mark.skip(reason="벡터 DB 및 임베딩 모델 설정 필요")
-    def test_search_workflow(self):
-        """검색 워크플로우 테스트"""
-        from src.rag import RAGWorkflow, VectorStore, EmbeddingGenerator
+    def test_vector_store_integration(self, temp_dir, request):
+        """벡터 스토어 통합 테스트"""
+        # 통합 테스트는 --run-integration 플래그로 실행
+        if not request.config.getoption("--run-integration", default=False):
+            pytest.skip("통합 테스트는 --run-integration 플래그 필요")
+        """벡터 스토어 통합 테스트"""
+        import chromadb
+        from src.rag.vector_store import VectorStore
+        from src.models import StatuteModel
         
-        vector_store = VectorStore()
-        embedding_gen = EmbeddingGenerator()
-        workflow = RAGWorkflow(vector_store, embedding_gen)
-        
-        result = workflow.run("사기 범죄에 대해 알려주세요")
-        
-        assert "query" in result
-        assert "context" in result
-        assert result.get("error") is None
+        # 임시 ChromaDB 경로 사용
+        with patch('config.settings.settings') as mock_settings:
+            mock_settings.vector_db_type = "chroma"
+            mock_settings.chroma_persist_path = temp_dir / "test_vector_db"
+            
+            vector_store = VectorStore(collection_name="test_collection")
+            
+            # 테스트 문서 생성
+            test_doc = StatuteModel(
+                id="test-doc-1",
+                category="형사",
+                sub_category="사기",
+                type="statute",
+                title="형법 제347조",
+                content="제1조 사기 범죄에 대한 조문입니다.",
+            )
+            
+            # 임베딩 Mock (실제 API 호출 없이)
+            test_embedding = [0.1] * 1536
+            
+            # 문서 추가
+            ids = vector_store.add_documents(
+                documents=[test_doc],
+                embeddings=[test_embedding],
+            )
+            
+            assert len(ids) == 1
+            assert ids[0] == "test-doc-1"
+            
+            # 검색 테스트
+            results = vector_store.search(
+                query_embedding=test_embedding,
+                n_results=1,
+            )
+            
+            assert "ids" in results
+            assert len(results["ids"][0]) > 0
 
 
 @pytest.mark.integration
