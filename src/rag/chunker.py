@@ -120,6 +120,8 @@ class TextChunker:
         else:
             chunks = self._chunk_default(document)
         
+        # 빈 청크 제거
+        chunks = [chunk for chunk in chunks if chunk.get("text", "").strip()]
         return chunks
     
     def _split_article_by_items(
@@ -205,18 +207,22 @@ class TextChunker:
                 })
         else:
             # 항목이 없으면 조문 전체를 하나의 청크로
-            chunks.append({
-                "text": article_text,
-                "metadata": {
-                    "chunk_index": 0,
-                    "document_id": document.id,
-                    "document_type": document.type,
-                    "article_number": article_number,
-                    "item_number": None,
-                    "is_header": False,
-                }
-            })
+            article_text_stripped = article_text.strip()
+            if article_text_stripped:
+                chunks.append({
+                    "text": article_text_stripped,
+                    "metadata": {
+                        "chunk_index": 0,
+                        "document_id": document.id,
+                        "document_type": document.type,
+                        "article_number": article_number,
+                        "item_number": None,
+                        "is_header": False,
+                    }
+                })
         
+        # 빈 청크 제거
+        chunks = [chunk for chunk in chunks if chunk.get("text", "").strip()]
         return chunks
     
     def _chunk_case(self, document: BaseDocument) -> List[Dict[str, Any]]:
@@ -324,6 +330,8 @@ class TextChunker:
         else:
             chunks = self._chunk_default(document)
         
+        # 빈 청크 제거
+        chunks = [chunk for chunk in chunks if chunk.get("text", "").strip()]
         return chunks
     
     def _classify_case_section(self, section_title: str) -> str:
@@ -362,17 +370,22 @@ class TextChunker:
         
         if isinstance(document.content, list):
             for i, item in enumerate(document.content):
-                chunks.append({
-                    "text": str(item),
-                    "metadata": {
-                        "chunk_index": i,
-                        "document_id": document.id,
-                        "document_type": document.type,
-                    }
-                })
+                item_text = str(item).strip()
+                # 빈 항목은 제외
+                if item_text:
+                    chunks.append({
+                        "text": item_text,
+                        "metadata": {
+                            "chunk_index": len(chunks),
+                            "document_id": document.id,
+                            "document_type": document.type,
+                        }
+                    })
         else:
             chunks = self._chunk_default(document)
         
+        # 빈 청크 제거
+        chunks = [chunk for chunk in chunks if chunk.get("text", "").strip()]
         return chunks
     
     def _chunk_default(self, document: BaseDocument) -> List[Dict[str, Any]]:
@@ -400,17 +413,22 @@ class TextChunker:
                 # 다음 청크 시작점을 오버랩만큼 앞으로
                 end = end - self.chunk_overlap
             
-            chunks.append({
-                "text": chunk_text.strip(),
-                "metadata": {
-                    "chunk_index": chunk_index,
-                    "document_id": document.id,
-                    "document_type": document.type,
-                }
-            })
+            chunk_text_stripped = chunk_text.strip()
+            # 빈 청크는 추가하지 않음
+            if chunk_text_stripped:
+                chunks.append({
+                    "text": chunk_text_stripped,
+                    "metadata": {
+                        "chunk_index": chunk_index,
+                        "document_id": document.id,
+                        "document_type": document.type,
+                    }
+                })
+                chunk_index += 1
             
-            chunk_index += 1
             start = end if end > start else start + self.chunk_size
         
+        # 최종적으로 빈 청크 제거
+        chunks = [chunk for chunk in chunks if chunk["text"].strip()]
         return chunks
 

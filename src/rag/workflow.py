@@ -136,6 +136,8 @@ class RAGWorkflow:
             
             # ChromaDB where 절 구성
             # 사건번호가 있으면 정확한 매칭으로 검색 범위 축소
+            # 주의: court_exclude, court_include는 ChromaDB where 절에서 직접 지원하지 않으므로
+            # 벡터 검색 후 필터링 단계에서 처리
             where = None
             if metadata_filters:
                 # ChromaDB where 절 형식으로 변환 (단순 형식 사용)
@@ -143,7 +145,8 @@ class RAGWorkflow:
                 # 여러 조건: {"$and": [{"case_number": "2005고합694"}, {"category": "형사"}]}
                 where_conditions = {}
                 for key, value in metadata_filters.items():
-                    if value:  # None이 아닌 경우만
+                    # court_exclude, court_include는 where 절에서 제외 (나중에 필터링)
+                    if value and key not in ("court_exclude", "court_include"):
                         where_conditions[key] = value
                 
                 if where_conditions:
@@ -217,10 +220,24 @@ class RAGWorkflow:
             if metadata_filters:
                 for key, value in metadata_filters.items():
                     if key != "type":  # 타입은 이미 필터링됨
-                        filtered_results = [
-                            r for r in filtered_results
-                            if r.get("metadata", {}).get(key) == value
-                        ]
+                        if key == "court_exclude":  # 법원 제외 필터 (하급심 검색 시)
+                            # 대법원을 제외한 법원만 필터링
+                            filtered_results = [
+                                r for r in filtered_results
+                                if r.get("metadata", {}).get("court", "") != "대법원"
+                            ]
+                        elif key == "court_include":  # 법원 포함 필터
+                            # 특정 법원만 필터링
+                            filtered_results = [
+                                r for r in filtered_results
+                                if r.get("metadata", {}).get("court", "") == value
+                            ]
+                        else:
+                            # 일반 필터
+                            filtered_results = [
+                                r for r in filtered_results
+                                if r.get("metadata", {}).get(key) == value
+                            ]
             
             state["filtered_results"] = filtered_results
             logger.debug(f"메타데이터 필터링 완료: {len(filtered_results)}개 결과")
@@ -300,6 +317,17 @@ class RAGWorkflow:
         
         if "사기" in query:
             filters["sub_category"] = "사기"
+        
+        # 하급심 판례 필터 추출
+        if "하급심" in query or "지방법원" in query or "지법" in query or "고등법원" in query or "고법" in query:
+            # 하급심 판례만 검색 (대법원 제외)
+            filters["court_exclude"] = "대법원"
+            logger.info(f"하급심 판례 필터 적용 (원본 쿼리: {query[:50]})")
+        
+        # 대법원 판례 필터 추출
+        if "대법원" in query and "하급심" not in query:
+            filters["court_include"] = "대법원"
+            logger.info(f"대법원 판례 필터 적용 (원본 쿼리: {query[:50]})")
         
         # 사건번호 패턴 추출 (예: 2005고합694, 2010도2810 등)
         # 패턴: 4자리 숫자 + 한글(1자 이상) + 숫자(1자 이상)

@@ -65,8 +65,23 @@ class DocumentIndexer:
                     }
                 }]
             
+            # 빈 텍스트 필터링 (빈 임베딩 오류 방지)
+            valid_chunks = []
+            for chunk in chunks:
+                text = chunk["text"].strip() if isinstance(chunk.get("text"), str) else str(chunk.get("text", "")).strip()
+                if text:  # 빈 문자열이 아닌 경우만 포함
+                    valid_chunks.append(chunk)
+            
+            if not valid_chunks:
+                logger.warning(f"문서 {document.id}에 유효한 텍스트 청크가 없습니다.")
+                return {
+                    "success": False,
+                    "document_id": document.id,
+                    "error": "유효한 텍스트 청크가 없습니다.",
+                }
+            
             # 임베딩 생성 (비동기 메서드를 동기적으로 실행)
-            texts = [chunk["text"] for chunk in chunks]
+            texts = [chunk["text"] for chunk in valid_chunks]
             try:
                 loop = asyncio.get_running_loop()
                 # 이미 실행 중인 루프가 있으면 새 스레드에서 실행
@@ -83,9 +98,27 @@ class DocumentIndexer:
                     self.embedding_generator.embed_texts(texts)
                 )
             
+            # 임베딩 검증 (빈 임베딩 필터링)
+            final_chunks = []
+            final_embeddings = []
+            for i, (chunk, embedding) in enumerate(zip(valid_chunks, embeddings)):
+                if embedding and len(embedding) > 0:  # 빈 임베딩 제외
+                    final_chunks.append(chunk)
+                    final_embeddings.append(embedding)
+                else:
+                    logger.warning(f"청크 {i}의 임베딩이 비어있습니다: {chunk.get('text', '')[:50]}")
+            
+            if not final_chunks:
+                logger.warning(f"문서 {document.id}에 유효한 임베딩이 없습니다.")
+                return {
+                    "success": False,
+                    "document_id": document.id,
+                    "error": "유효한 임베딩이 생성되지 않았습니다.",
+                }
+            
             # 문서 객체 생성 (청크별)
             chunk_documents = []
-            for i, chunk_data in enumerate(chunks):
+            for i, chunk_data in enumerate(final_chunks):
                 # metadata를 딕셔너리로 변환
                 doc_metadata = {}
                 if document.metadata:
@@ -116,13 +149,13 @@ class DocumentIndexer:
             # 벡터 DB에 추가
             ids = self.vector_store.add_documents(
                 documents=chunk_documents,
-                embeddings=embeddings,
+                embeddings=final_embeddings,
             )
             
             return {
                 "success": True,
                 "document_id": document.id,
-                "chunks_count": len(chunks),
+                "chunks_count": len(final_chunks),
                 "indexed_ids": ids,
             }
             
@@ -154,9 +187,50 @@ class DocumentIndexer:
             }
         
         try:
-            # JSON 파일 읽기
+            # JSON 파일 읽기 (제어 문자 처리)
             with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                content = f.read()
+            
+            # JSON 파싱 (제어 문자 처리)
+            try:
+                # 먼저 strict=False로 시도 (일부 제어 문자 허용)
+                data = json.loads(content, strict=False)
+            except json.JSONDecodeError as e:
+                # strict=False로도 안 되면 제어 문자를 이스케이프
+                # JSON 문자열 값 내의 제어 문자만 이스케이프 (구조는 유지)
+                import re
+                
+                def fix_control_chars(text):
+                    """JSON 문자열 값 내의 제어 문자를 이스케이프"""
+                    # 문자열 값 패턴: "..." 내부의 내용만 수정
+                    def replace_in_string(match):
+                        # 전체 매치 (따옴표 포함)
+                        full_match = match.group(0)
+                        # 문자열 내용 (따옴표 제외)
+                        string_content = match.group(1)
+                        
+                        # 이미 이스케이프된 제어 문자는 건너뛰기
+                        if '\\n' in string_content or '\\r' in string_content or '\\t' in string_content:
+                            return full_match
+                        
+                        # 제어 문자 이스케이프
+                        fixed = string_content.replace('\n', '\\n')
+                        fixed = fixed.replace('\r', '\\r')
+                        fixed = fixed.replace('\t', '\\t')
+                        return f'"{fixed}"'
+                    
+                    # JSON 문자열 값 패턴: "..." (이스케이프된 따옴표 제외)
+                    pattern = r'"((?:[^"\\]|\\.)*)"'
+                    return re.sub(pattern, replace_in_string, text)
+                
+                try:
+                    # 제어 문자 수정 후 재시도
+                    content_fixed = fix_control_chars(content)
+                    data = json.loads(content_fixed, strict=False)
+                except (json.JSONDecodeError, Exception) as e2:
+                    # 여전히 실패하면 원본 오류 반환
+                    logger.warning(f"JSON 제어 문자 수정 후에도 파싱 실패: {file_path} - {str(e2)}")
+                    raise e
             
             # 검증
             success, model = self.validator.validate(data)
@@ -169,6 +243,12 @@ class DocumentIndexer:
             # 인덱싱
             return self.index_document(model, chunk=chunk)
             
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON 파싱 실패: {file_path} - {str(e)}")
+            return {
+                "success": False,
+                "error": f"JSON 파싱 오류: {str(e)}",
+            }
         except Exception as e:
             logger.error(f"파일 인덱싱 실패: {file_path} - {str(e)}")
             return {
